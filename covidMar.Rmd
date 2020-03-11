@@ -3,9 +3,41 @@ title: "COVID-19 outbreak"
 author: "Eduard Bakstein"
 date: "11.3. 2020"
 output:
-  
   pdf_document: default
+  word_document: default
 ---
+
+```{r settings-packages, echo=F,warning=F,message=F}
+
+# data handling + plots
+library(tidyverse)
+library(lubridate)
+library(RColorBrewer) 
+
+# web scraping
+library(rvest)
+
+# epidemiology
+library(earlyR)
+library(EpiEstim)
+
+# setup
+knitr::opts_chunk$set(echo = F, warning = F,message = F,fig.width = 8,fig.height=5,cache=FALSE,dev="pdf")
+Sys.setlocale("LC_TIME", "C")
+
+
+vars<-c('cases','incident','recovered','deaths')
+colSc<-scale_colour_manual(
+  values = brewer.pal(4,"Set1")[c(2,4,3,1)],
+  labels = vars,
+  aesthetics = c("colour", "fill"),
+  name = 'variable'
+)
+ 
+
+
+```
+
 
 ## Intro
 
@@ -27,29 +59,11 @@ The aim is to do exploratory analyses of the COVID-19 cases in selected countrie
 - https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series
 
 
-```{r settings-packages}
+## TO DO
 
-# data handling + plots
-library(tidyverse)
-library(lubridate)
-library(RColorBrewer) 
+ - per capita
+ - 
 
-# epidemiology
-library(earlyR)
-library(EpiEstim)
-
-knitr::opts_chunk$set(echo = FALSE, warning = F,message = F,fig.width = 8,fig.height=5,cache=FALSE,dev="pdf")
-
-colSc<-scale_colour_manual(
-  values = brewer.pal(4,"Set1")[c(2,4,1,3)],
-  labels =c('cases','incident','recovered','deaths'),
-  aesthetics = c("colour", "fill"),
-  name = 'variable'
-)
- 
-
-
-```
 
 ## Load data
 Using the Jons-Hopkins github repository to obtain current data, see
@@ -78,33 +92,84 @@ covid_recovered<-read_csv(jhu_recovered_url) %>% rename(province = "Province/Sta
   country = "Country/Region") %>% pivot_longer(-c(province, 
   country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(recovered=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date)
 
+
 # combine the 3 tables
 covid<-left_join(covid_conf,covid_deaths,by=c('country','Date'))
 covid<-left_join(covid,covid_recovered,by=c('country','Date')) 
 
 
+# modify country names - to be consistent with wiki 
+covid$country <- str_remove(covid$country,' \\(.+\\)') # remove country specifier (...republic of)
+covid$country <- str_remove(covid$country,'Mainland ')
+covid$country <- str_replace(covid$country,'Republic of Korea','South Korea')
+
  
 
+```
+
+Obtain data about population in each country by scraping the wikipedia page: 'https://en.wikipedia.org/wiki/List_of_countries_by_population_(United_Nations)'
+
+```{r number-inhabit}
+# get number of inhabitants: scrape from a wiki page 
+
+# the URL of the wikipedia page to use is in wp_page_url
+wp_page_url <- 'https://en.wikipedia.org/wiki/List_of_countries_by_population_(United_Nations)'
+page_html <- read_html(wp_page_url)
+population <- page_html %>% html_nodes("table") %>% .[[4]] %>% 
+  html_table(fill = TRUE)
+
+# clean up and convert to numbers
+population <- population %>% rename(country='Country or area',population2018='Population(1 July 2018)',population='Population(1 July 2019)') %>% mutate(country=str_replace(country,'\\[.+\\]','')) %>% mutate(population=as.numeric(str_replace_all(population,'\\,','')))
+
+
+
+covid<-left_join(covid,population[,c('country','population')], by='country')
+covid$casesPer1M <- 10^6*covid$cases/covid$population
 ```
 
 
 ### Plot selected countries
 ```{r}
+selCountries<-c('Czech Republic','Italy','Iran','Germany','France','Austria','Slovakia','Poland','South Korea','US')
+
 # cases in selected countries
-covid %>% filter(country %in% c('Czech Republic','Italy','Iran','Germany','France','Austria','Slovakia','Poland','South Korea','US')) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() # + facet_wrap(~country) + theme(legend.position = 'none')
+covid %>% filter(country %in% selCountries) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() + ggtitle('cummulative cases - comparison') # + facet_wrap(~country) + theme(legend.position = 'none')
+
+selCountries<- c(selCountries,'China')
+
+```
+
+Note: China number of cases too high to be plot on linear y axis with other countries
+
+```{r}
+covid %>% filter(country %in% selCountries) %>%  ggplot(aes(x=Date,y=cases,col=country)) + scale_y_continuous(trans='log10',breaks = 10^(0:5),labels = function(x) format(x, scientific = FALSE)) + geom_line() + ggtitle('cummulative cases - Log plot') # + facet_wrap(~country) + theme(legend.position = 'none')
+
+```
+
+Note: China added to the log plot
+
+
+```{r per-capita}
+
+covid %>% filter(country %in% selCountries) %>%  ggplot(aes(x=Date,y=casesPer1M,col=country)) + scale_y_continuous(trans='log10',labels = function(x) format(x, scientific = FALSE)) + geom_line() + ggtitle('cummulative cases per 1 mil. inhabitants - Log plot') # + facet_wrap(~country) + theme(legend.position = 'none')
 
 
 ```
 
 
-### Cummulative stats for selected countries
+### Cummulative stats for Individual selected countries
 ```{r plot-it}
 
-countries<-c('Italy','Iran (Islamic Republic of)','Republic of Korea','Mainland China','Germany','Czech Republic')
 
-for(cnt in countries){
+for(cntr in selCountries){
   
-  plt <- covid %>% filter(country==cnt) %>% reshape2::melt(id=c('country','Date'))  %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + colSc+ ggtitle(paste0('COVID19 - ',cnt))# + facet_wrap(~country) + theme(legend.position = 'none')
+  cdata<-covid %>% filter(country==cntr)
+  
+  outbreakDate<- min(cdata$Date[cdata$cases>0])
+  
+  plt <-  cdata[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% mutate(variable=fct_relevel(variable,vars)) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + colSc+ ggtitle(paste0('COVID19 - ',cntr)) + xlim(outbreakDate-days(3),NA)# + facet_wrap(~country) + theme(legend.position = 'none')
+  
+  
   print(plt)
 }
 
@@ -116,9 +181,9 @@ for(cnt in countries){
 ### exploratory plots
 ```{r plot-CZ}
 covidCZ <- covid %>% filter(country=='Czech Republic') 
-covidCZ %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() +colSc + ggtitle('COVID-19 Czech Republic')
+covidCZ[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() +colSc + ggtitle('COVID-19 Czech Republic')
 
-outbreakCZ<-min(covidCz$Date[covidCz$cases>0])
+outbreakCZ<-min(covidCZ$Date[covidCZ$cases>0])
 
 ```
 
