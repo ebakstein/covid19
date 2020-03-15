@@ -20,10 +20,12 @@ library(RColorBrewer)
 
 # web scraping
 library(rvest)
+library(jsonlite)
+
 
 # epidemiology
-library(earlyR)
-library(EpiEstim)
+# library(earlyR)
+# library(EpiEstim)
 
 # setup
 knitr::opts_chunk$set(echo = F, warning = F,message = F,fig.width = 8,fig.height=5,cache=FALSE,dev="pdf")
@@ -76,6 +78,9 @@ Using the Jons-Hopkins github repository to obtain current data, see
 https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series (updated daily around 23:59 UTC)
 
 ```{r load-data}
+
+## JONS-HOPKINS GITHUB
+
 jhu_base_url<- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
 
 # jhu_conf_url <- paste("https://raw.githubusercontent.com/CSSEGISandData/", "COVID-19/master/csse_covid_19_data/", "csse_covid_19_time_series/", "time_series_19-covid-Confirmed.csv", sep = "")
@@ -120,6 +125,9 @@ covid$country <- str_replace(covid$country,'Czechia','Czech Republic')
 Obtain data about population in each country by scraping the wikipedia page: 'https://en.wikipedia.org/wiki/List_of_countries_by_population_(United_Nations)'
 
 ```{r number-inhabit}
+
+## WIKI number of inhabitants
+
 # get number of inhabitants: scrape from a wiki page 
 
 # the URL of the wikipedia page to use is in wp_page_url
@@ -136,6 +144,24 @@ population <- population %>% rename(country='Country or area',population2018='Po
 covid<-left_join(covid,population[,c('country','population')], by='country')
 covid$casesPer1M <- 10^6*covid$cases/covid$population
 ```
+
+obtain latest czech data from MZ / apify https://api.apify.com/v2/key-value-stores/K373S4uCFR9W1K8ei/records/LATEST?disableRedirect=true (parsed from https://onemocneni-aktualne.mzcr.cz/covid-19)
+
+```{r cech-apify-json}
+
+apifyCZurl<-'https://api.apify.com/v2/key-value-stores/K373S4uCFR9W1K8ei/records/LATEST?disableRedirect=true'
+czParsed <- fromJSON(txt=apifyCZurl)
+
+tested<-czParsed$testedCases %>% mutate(value=as.numeric(value), date=as.Date(substr(date,1,10))) %>% rename(testedCases='value',Date='date')
+totalCases<-czParsed$totalPositiveTests %>% mutate(value=as.numeric(value), date=as.Date(substr(date,1,10))) %>% rename(totalCases='value',Date='date')
+
+# merge + compute incident cases
+covidCZ<-merge(tested,totalCases,by='Date',all.x=T,all.y=T) %>% arrange(Date) %>% mutate(newCases=c(0,diff(totalCases)))
+
+
+```
+
+
 
 
 ### Plot selected countries
@@ -188,16 +214,37 @@ for(cntr in selCountries){
 ## Plot and analyze Czech Rep.
 
 
-### exploratory plots
-```{r plot-CZ}
-covidCZ <- covid %>% filter(country=='Czech Republic') 
-covidCZ[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() +colSc + ggtitle('COVID-19 Czech Republic')
+### exploratory plots: UZIS data
 
-outbreakCZ<-min(covidCZ$Date[covidCZ$cases>0])
+```{r plot-CZ}
+covidCZ %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+
+```
+
+
+### exploratory plots: JHU data
+```{r plot-CZ-jhu}
+covidCZjhu <- covid %>% filter(country=='Czech Republic') 
+covidCZjhu[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() +colSc + ggtitle('COVID-19 Czech Republic')
+
+outbreakCZ<-min(covidCZjhu$Date[covidCZ$cases>0])
 
 ```
 
 first case in CZ: `r outbreakCZ`
+
+
+### compare JHU and ÚZIS data
+
+```{r compare-jhu-uzis}
+
+combCZ <- merge(covidCZ,covidCZjhu,by='Date')
+
+combCZ[,c('Date','totalCases','newCases','cases','incident')] %>% rename(totalUZIS='totalCases',newUZIS='newCases',totalJHU='cases',newJHU='incident') %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + xlim(as.Date('2020-02-28'),NA) + geom_line() + ggtitle('CovidCZ: JHU and UZIS data comparison')
+
+```
+
+
 
 ### Epidemiological modelling - TBD
 
@@ -215,7 +262,7 @@ And https://timchurches.github.io/blog/posts/2020-03-10-modelling-the-effects-of
 
 ```{r save-todays-data}
 
-# write.csv(covid,paste0('covid',format(Sys.Date(),'%Y%m%d'),'.csv'))
+ write.csv(covid,paste0('covid',format(Sys.Date(),'%Y%m%d'),'.csv'))
 
 ```
 
