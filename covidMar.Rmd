@@ -16,7 +16,8 @@ output:
 # data handling + plots
 library(tidyverse)
 library(lubridate)
-library(RColorBrewer) 
+library(RColorBrewer)
+library(knitr)
 
 # web scraping
 library(rvest)
@@ -157,16 +158,15 @@ totalCases<-czParsed$totalPositiveTests %>% mutate(value=as.numeric(value), date
 
 # merge + compute incident cases
 covidCZ<-merge(tested,totalCases,by='Date',all.x=T,all.y=T) %>% arrange(Date) %>% mutate(newCases=c(0,diff(totalCases)))
-
+covidCZ$propIncrease<-c(0,covidCZ$newCases[2:nrow(covidCZ)]/covidCZ$totalCases[1:(nrow(covidCZ)-1)])
+covidCZ[!is.na(covidCZ$propIncrease) & covidCZ$propIncrease==Inf,'propIncrease']<-1
 
 ```
 
 
-
-
 ### Plot selected countries
 ```{r}
-selCountries<-c('Czech Republic','Italy','Iran','Germany','France','Austria','Slovakia','Poland','South Korea','US','Iceland')
+selCountries<-c('Czech Republic','Italy','Iran','Germany','Spain','France','Austria','Slovakia','Poland','South Korea','US')
 
 # cases in selected countries
 covid %>% filter(country %in% selCountries) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() + ggtitle('cummulative cases - comparison') # + facet_wrap(~country) + theme(legend.position = 'none')
@@ -211,15 +211,58 @@ for(cntr in selCountries){
 
 ```
 
+### Latest number of cases across countries
+
+```{r latest-numbers}
+
+maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(maxCount=max(cases), dateMax=Date[cases==max(cases)]) %>% ungroup()
+  
+kable(maxCounts)
+
+```
+
+
+
 ## Plot and analyze Czech Rep.
 
 
 ### exploratory plots: UZIS data
 
 ```{r plot-CZ}
-covidCZ %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+covidCZ %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+
+
+
+covidCZ[,c('Date','propIncrease','newCases')]  %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+
+meanIncreaseCZ<-mean(covidCZ$propIncrease,na.rm=TRUE)
+
+meanIncreaseCZl5<-mean(covidCZ$propIncrease[nrow(covidCZ)+(-4:0)],na.rm=TRUE)
+
+outbreakCZ<-min(covidCZ$Date[covidCZ$totalCases>0],na.rm=T)
+
 
 ```
+
+first case in CZ: `r outbreakCZ`
+
+Mean daily increase: `r format(100*meanIncreaseCZ,digits=3)`%
+
+The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZ),digits=4)` days.
+
+Mean daily increase (last 5 days): `r format(100*meanIncreaseCZl5,digits=3)`%
+
+The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZl5),digits=4)` days.
+
+
+### CZ data table
+
+```{r data table}
+
+kable(covidCZ)
+
+```
+
 
 
 ### exploratory plots: JHU data
@@ -227,12 +270,8 @@ covidCZ %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=varia
 covidCZjhu <- covid %>% filter(country=='Czech Republic') 
 covidCZjhu[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() +colSc + ggtitle('COVID-19 Czech Republic')
 
-outbreakCZ<-min(covidCZjhu$Date[covidCZ$cases>0])
 
 ```
-
-first case in CZ: `r outbreakCZ`
-
 
 ### compare JHU and ÚZIS data
 
