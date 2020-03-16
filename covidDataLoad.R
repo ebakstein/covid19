@@ -22,11 +22,11 @@ covidLoadCZ<-function(){
   apifyCZurl<-'https://api.apify.com/v2/key-value-stores/K373S4uCFR9W1K8ei/records/LATEST?disableRedirect=true'
   czParsed <- fromJSON(txt=apifyCZurl)
   
-  tested<-czParsed$numberOfTestedGraph %>% mutate(value=as.numeric(str_remove(value,',')), date=as.Date(substr(date,1,10))) %>% rename(testedCases='value',Date='date')
-  totalCases<-czParsed$totalPositiveTests %>% mutate(value=as.numeric(str_remove(value,',')), date=as.Date(substr(date,1,10))) %>% rename(totalCases='value',Date='date')
+  testedCases<-czParsed$numberOfTestedGraph %>% mutate(value=as.numeric(str_remove(value,',')), date=as.Date(substr(date,1,10))) %>% rename(testedCases='value')
+  totalPositiveTests<-czParsed$totalPositiveTests %>% mutate(value=as.numeric(str_remove(value,',')), date=as.Date(substr(date,1,10))) %>% rename(totalCases='value')
   
   # merge + compute incident cases
-  covidCZ<-merge(tested,totalCases,by='Date',all.x=T,all.y=T) %>% arrange(Date) %>% mutate(newCases=c(0,diff(totalCases)))
+  covidCZ<-merge(testedCases,totalPositiveTests,by='date',all.x=T,all.y=T) %>% arrange(date) %>% mutate(newCases=c(0,diff(totalCases)))
   covidCZ$propIncrease<-c(0,covidCZ$newCases[2:nrow(covidCZ)]/covidCZ$totalCases[1:(nrow(covidCZ)-1)])
   covidCZ[!is.na(covidCZ$propIncrease) & covidCZ$propIncrease==Inf,'propIncrease']<-1
   

@@ -5,7 +5,7 @@ author:
     eduard.bakstein@nudz.cz,
     http://bakstein.net,
     @edbakstein
-date: "12.3.2020"
+date: "16.3.2020"
 output:
   pdf_document: default
   word_document: default
@@ -82,44 +82,6 @@ https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_c
 
 ```{r load-data}
 
-# ## JONS-HOPKINS GITHUB
-# 
-# jhu_base_url<- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
-# 
-# # jhu_conf_url <- paste("https://raw.githubusercontent.com/CSSEGISandData/", "COVID-19/master/csse_covid_19_data/", "csse_covid_19_time_series/", "time_series_19-covid-Confirmed.csv", sep = "")
-# 
-# jhu_conf_url <- paste0(jhu_base_url,"time_series_19-covid-Confirmed.csv")
-# jhu_deaths_url <- paste0(jhu_base_url,"time_series_19-covid-Deaths.csv")
-# jhu_recovered_url <- paste0(jhu_base_url,"time_series_19-covid-Recovered.csv")
-# 
-# 
-# covid_conf<-read_csv(jhu_conf_url) %>% rename(province = "Province/State", 
-#   country = "Country/Region") %>% pivot_longer(-c(province, 
-#   country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(cases=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date) %>% group_by(country) %>% 
-#   mutate(incident = c(0, diff(cases))) 
-# 
-# covid_deaths<-read_csv(jhu_deaths_url) %>% rename(province = "Province/State", 
-#   country = "Country/Region") %>% pivot_longer(-c(province, 
-#   country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(deaths=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date)
-# 
-# covid_recovered<-read_csv(jhu_recovered_url) %>% rename(province = "Province/State", 
-#   country = "Country/Region") %>% pivot_longer(-c(province, 
-#   country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(recovered=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date)
-# 
-# 
-# # combine the 3 tables
-# covid<-left_join(covid_conf,covid_deaths,by=c('country','Date'))
-# covid<-left_join(covid,covid_recovered,by=c('country','Date')) 
-# 
-# 
-# # modify country names - to be consistent with wiki 
-# covid$country <- str_remove(covid$country,' \\(.+\\)') # remove country specifier (...republic of)
-# covid$country <- str_remove(covid$country,'Mainland ')
-# covid$country <- str_replace(covid$country,'Republic of Korea','South Korea')
-# covid$country <- str_replace(covid$country,'Korea, South','South Korea')
-# covid$country <- str_replace(covid$country,'Czechia','Czech Republic')
-# 
-
 covid<-covidLoadJHU()
  
 
@@ -129,53 +91,9 @@ Obtain data about population in each country by scraping the wikipedia page: 'ht
 
 ```{r number-inhabit}
 
-# ## WIKI number of inhabitants
-# 
-# # get number of inhabitants: scrape from a wiki page 
-# 
-# # the URL of the wikipedia page to use is in wp_page_url
-# wp_page_url <- 'https://en.wikipedia.org/wiki/List_of_countries_by_population_(United_Nations)'
-# page_html <- read_html(wp_page_url)
-# population <- page_html %>% html_nodes("table") %>% .[[4]] %>% 
-#   html_table(fill = TRUE)
-# 
-# # clean up and convert to numbers
-# population <- population %>% rename(country='Country or area',population2018='Population(1 July 2018)',population='Population(1 July 2019)') %>% mutate(country=str_replace(country,'\\[.+\\]','')) %>% mutate(population=as.numeric(str_replace_all(population,'\\,','')))
-# 
-# 
-# 
-
 # attach population data from wikipedia
 covid <- attachPopCounts(covid)
 
-# # attach the population data to the covid dataset
-# covid<-left_join(covid,population[,c('country','population')], by='country')
-# covid$casesPer1M <- 10^6*covid$cases/covid$population
-
-```
-
-obtain latest czech data from MZ / apify https://api.apify.com/v2/key-value-stores/K373S4uCFR9W1K8ei/records/LATEST?disableRedirect=true (parsed from https://onemocneni-aktualne.mzcr.cz/covid-19)
-
-```{r cech-apify-json}
-# 
-# apifyCZurl<-'https://api.apify.com/v2/key-value-stores/K373S4uCFR9W1K8ei/records/LATEST?disableRedirect=true'
-# czParsed <- fromJSON(txt=apifyCZurl)
-# 
-# tested<-czParsed$numberOfTestedGraph %>% mutate(value=as.numeric(value), date=as.Date(substr(date,1,10))) %>% rename(testedCases='value',Date='date')
-# totalCases<-czParsed$totalPositiveTests %>% mutate(value=as.numeric(value), date=as.Date(substr(date,1,10))) %>% rename(totalCases='value',Date='date')
-# 
-# # merge + compute incident cases
-# covidCZ<-merge(tested,totalCases,by='Date',all.x=T,all.y=T) %>% arrange(Date) %>% mutate(newCases=c(0,diff(totalCases)))
-# covidCZ$propIncrease<-c(0,covidCZ$newCases[2:nrow(covidCZ)]/covidCZ$totalCases[1:(nrow(covidCZ)-1)])
-# covidCZ[!is.na(covidCZ$propIncrease) & covidCZ$propIncrease==Inf,'propIncrease']<-1
-
-# # cases by region
-# covidCZregions <- czParsed$infectedByRegion %>% mutate(value=as.numeric(value)) %>% rename(totalCases='value')
-
-# load CZ covid data
-tmp<-covidLoadCZ()
-covidCZ <- tmp$covidCZ
-covidCZregions <- tmp$covidCZregions
 ```
 
 
@@ -228,6 +146,8 @@ for(cntr in selCountries){
 
 ### Latest number of cases across countries
 
+According to the Johns-Hopkins data
+
 ```{r latest-numbers}
 
 maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(maxCount=max(cases), dateMax=Date[cases==max(cases)]) %>% ungroup()
@@ -238,23 +158,34 @@ kable(maxCounts)
 
 
 
-## Plot and analyze Czech Rep.
+## Plot and analyze Czech Rep.  - CZ data
+
+obtain latest czech data from MZ / apify https://api.apify.com/v2/key-value-stores/K373S4uCFR9W1K8ei/records/LATEST?disableRedirect=true (parsed from https://onemocneni-aktualne.mzcr.cz/covid-19)
+
+```{r cech-apify-json}
+
+# load CZ covid data
+tmp<-covidLoadCZ()
+covidCZ <- tmp$covidCZ
+covidCZregions <- tmp$covidCZregions
+```
+
 
 
 ### exploratory plots: UZIS data
 
 ```{r plot-CZ}
-covidCZ %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+covidCZ %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
 
 
 
-covidCZ[,c('Date','propIncrease','newCases')]  %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+covidCZ[,c('date','propIncrease','newCases')]  %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
 
 meanIncreaseCZ<-mean(covidCZ$propIncrease,na.rm=TRUE)
 
 meanIncreaseCZl5<-mean(covidCZ$propIncrease[nrow(covidCZ)+(-4:0)],na.rm=TRUE)
 
-outbreakCZ<-min(covidCZ$Date[covidCZ$totalCases>0],na.rm=T)
+outbreakCZ<-min(covidCZ$date[covidCZ$totalCases>0],na.rm=T)
 
 
 ```
@@ -263,11 +194,11 @@ first case in CZ: `r outbreakCZ`
 
 Mean daily increase: `r format(100*meanIncreaseCZ,digits=3)`%
 
-The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZ),digits=4)` days.
+The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZ),digits=3)` days (`r format(24/log2(1+meanIncreaseCZ),digits=3)` hours).
 
 Mean daily increase (last 5 days): `r format(100*meanIncreaseCZl5,digits=3)`%
 
-The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZl5),digits=4)` days.
+The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZl5),digits=3)` days (`r format(24/log2(1+meanIncreaseCZl5),digits=3)` hours).
 
 
 ### CZ data table
@@ -292,9 +223,9 @@ covidCZjhu[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Dat
 
 ```{r compare-jhu-uzis}
 
-combCZ <- merge(covidCZ,covidCZjhu,by='Date')
+combCZ <- merge(covidCZ,covidCZjhu,by.x='date',by.y='Date')
 
-combCZ[,c('Date','totalCases','newCases','cases','incident')] %>% rename(totalUZIS='totalCases',newUZIS='newCases',totalJHU='cases',newJHU='incident') %>% reshape2::melt(id=c('Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + xlim(as.Date('2020-02-28'),NA) + geom_line() + ggtitle('CovidCZ: JHU and UZIS data comparison')
+combCZ[,c('date','totalCases','newCases','cases','incident')] %>% rename(totalUZIS='totalCases',newUZIS='newCases',totalJHU='cases',newJHU='incident') %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + xlim(as.Date('2020-02-28'),NA) + geom_line() + ggtitle('CovidCZ: JHU and UZIS data comparison')
 
 ```
 
