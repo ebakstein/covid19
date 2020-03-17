@@ -5,7 +5,7 @@ author:
     eduard.bakstein@nudz.cz,
     http://bakstein.net,
     @edbakstein
-date: "16.3.2020"
+date: "17.3.2020"
 output:
   pdf_document: default
   word_document: default
@@ -18,6 +18,7 @@ library(tidyverse)
 library(lubridate)
 library(RColorBrewer)
 library(knitr)
+library(directlabels)
 
 # web scraping
 library(rvest)
@@ -99,11 +100,10 @@ covid <- attachPopCounts(covid)
 
 ### Plot selected countries
 ```{r}
-selCountries<-c('Czech Republic','Italy','Iran','Germany','Spain','France','Austria','Slovakia','Poland','South Korea','US')
+selCountries<-c('Czech Republic','Italy','Iran','Germany','Spain','France','Austria','Slovakia','Poland','South Korea','United States')
 
 # cases in selected countries
-covid %>% filter(country %in% selCountries) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() + ggtitle('cummulative cases - comparison') # + facet_wrap(~country) + theme(legend.position = 'none')
-
+covid %>% filter(country %in% selCountries) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() + ggtitle('cummulative cases - comparison') + scale_x_date(expand=expand_scale(add=10)) + geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position = 'none')
 selCountries<- c(selCountries,'China')
 
 ```
@@ -111,7 +111,7 @@ selCountries<- c(selCountries,'China')
 Note: China number of cases too high to be plot on linear y axis with other countries
 
 ```{r}
-covid %>% filter(country %in% selCountries) %>%  ggplot(aes(x=Date,y=cases,col=country)) + scale_y_continuous(trans='log10',breaks = 10^(0:5),labels = function(x) format(x, scientific = FALSE)) + geom_line() + ggtitle('cummulative cases - Log plot') # + facet_wrap(~country) + theme(legend.position = 'none')
+covid %>% filter(country %in% selCountries) %>%  ggplot(aes(x=Date,y=cases,col=country)) + scale_y_continuous(trans='log10',breaks = 10^(0:5),labels = function(x) format(x, scientific = FALSE)) + geom_line() + ggtitle('cummulative cases - Log plot') + scale_x_date(expand=expand_scale(add=10)) + geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position = 'none')# + facet_wrap(~country) + theme(legend.position = 'none')
 
 ```
 
@@ -120,7 +120,7 @@ Note: China added to the log plot
 
 ```{r per-capita}
 
-covid %>% filter(country %in% selCountries) %>%  ggplot(aes(x=Date,y=casesPer1M,col=country)) + scale_y_continuous(trans='log10',labels = function(x) format(x, scientific = FALSE)) + geom_line() + ggtitle('cummulative cases per 1 mil. inhabitants - Log plot') # + facet_wrap(~country) + theme(legend.position = 'none')
+covid %>% filter(country %in% selCountries) %>%  ggplot(aes(x=Date,y=casesPer1M,col=country)) + scale_y_continuous(trans='log10',labels = function(x) format(x, scientific = FALSE))+ scale_x_date(expand=expand_scale(add=10)) + geom_line() + ggtitle('cummulative cases per 1 mil. inhabitants - Log plot') + geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position = 'none')   # + facet_wrap(~country)
 
 
 ```
@@ -150,7 +150,7 @@ According to the Johns-Hopkins data
 
 ```{r latest-numbers}
 
-maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(maxCount=max(cases), dateMax=Date[cases==max(cases)]) %>% ungroup()
+maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(dateMax=Date[cases==max(cases)],count=max(cases), deaths=deaths[cases==max(cases)], recovered=recovered[cases==max(cases)]) %>% mutate(deathRate=deaths/count) %>% ungroup()
   
 kable(maxCounts)
 
@@ -210,6 +210,108 @@ kable(covidCZ)
 ```
 
 
+### Austria vs CZ
+
+AIM: estimate, by how many days the Czech Rep. is delayed behind other countries. First comparison: Austria
+
+```{r comp-r}
+covidCZjhu <- covid %>% filter(country=='Czech Republic') 
+covidATjhu  <- covid %>% filter(country=='Austria') 
+
+covidCZAT<-merge(covidCZjhu[,1:3],covidATjhu[,1:3],by='Date') %>% rename(casesCZ='cases.x',casesAT='cases.y') %>% select(Date,casesCZ,casesAT)
+
+
+czDelay<-4
+
+covidCZAT %>% reshape2::melt(id='Date') %>% mutate(Date = ifelse(variable=='casesAT',Date,Date-days(czDelay))) %>%  ggplot(aes(x=Date,y=value,col=variable)) + geom_line(lwd=I(1))
+
+# covidCZAT %>% mutate(casesATdel4d = lag(casesAT,n=czDelay)) %>% reshape2::melt(id='Date') %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line(lwd=I(1)) + geom_point() +xlim(as.Date('2020-02-26'),NA) + theme(legend.position = c(0.01,0.99),legend.justification = c(0,1)) + ggtitle(paste0('Total COVID-19 cases: Czech Rep. vs Austria (delayed by ',czDelay,' days)'))
+
+ ggsave('CzvsAt-4days.png',width=20,height=15,units='cm',scale=.8)
+
+
+# plot delayed data
+qplot(covidCZAT$casesAT[1:(nrow(covidCZAT)-czDelay)],covidCZAT$casesCZ[(czDelay+1):nrow(covidCZAT)]) + xlab(paste0('casesAT delayed by ', czDelay,' days')) + ylab('casesCZ') +geom_abline(slope=1,intercept=0,col='orange') + ggtitle('Czech Republic vs delayed Austria: total cases')
+
+# qplot(covidCZAT$Date, covidCZAT$casesAT[1:(nrow(covidCZAT)-czDelay)],geom='line') + geom_line(aes(x=covidCZAT$Date),y=covidCZAT$casesCZ[(czDelay+1):nrow(covidCZAT)]) + xlab(paste0('casesAT delayed by ', czDelay,' days')) + ylab('casesCZ') +geom_abline(slope=1,intercept=0,col='orange') + ggtitle('Czech Republic vs delayed Austria: total cases')
+
+
+
+covidCZAT %>% reshape2::melt(id='Date') %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 CZ vs Austria')
+
+
+```
+
+
+### CZ vs others
+
+The lag selected by minimizing the RMS between total cases in CZ and total cases in the comparison countries. This compares the initial segment only and we can thus see, which scenarios may follow...
+
+```{r cz-delays}
+covidCZjhu <- covid %>% filter(country=='Czech Republic') 
+
+
+rms<-function(delayX,data){
+  if(delayX>=0)
+    sq<-data$x[(delayX+1):nrow(data)]-data$y[1:(nrow(data)-delayX)]
+  else
+    sq<-data$x[1:(nrow(data)+delayX)]-data$y[(-delayX+1):nrow(data)]
+    
+  return(sqrt(mean((sq)^2)))
+  }
+delayRange<--14:21
+
+
+
+compCntrs <- c('Austria','Italy','Germany','Spain','France','Slovakia','Poland')
+compDelays<- rep(NA,length(compCntrs))
+for(cntri in 1:length(compCntrs)){
+  cntr<-compCntrs[cntri]
+  # combine data
+  covidComp<-covid %>% filter(country==cntr)
+  covidCZComp<-merge(covidCZjhu[,1:3],covidComp[,1:3],by='Date')[,c('Date','cases.x','cases.y')] %>% rename(x='cases.x',y='cases.y')
+  
+  crit<-lapply(delayRange,rms,covidCZComp)
+  compDelays[cntri] <- delayRange[which.min(crit)]
+}
+
+kable(t(rbind(compCntrs,compDelays)),col.names = c('Country','CZ delayed by (days)'))
+
+
+# other ideas
+# use r-squared (stupid idea)
+# rsq<-function(czDelay,covidCZComp)summary(lm(log(1+covidCZComp$cases.x[(czDelay+1):length(covidCZComp$cases.x)])~log(1+covidCZComp$cases.y[1:(length(covidCZComp$cases.x)-czDelay)])))$r.squared
+# lapply(1:10,rsq,covidCZComp)
+
+# use RMS
+# rmslg<-function(czDelay,covidCZComp)sqrt(mean((log(1+covidCZComp$cases.x[(czDelay+1):length(covidCZComp$cases.x)])-log(1+covidCZComp$cases.y[1:(length(covidCZComp$cases.x)-czDelay)]))^2))
+
+```
+
+Note: tested integer delays in the range `r min(delayRange)`, `r max(delayRange)` days
+
+
+```{r plot-lagged}
+
+
+compCntrs <- c(compCntrs,'Czech Republic')
+compDelays<- c(compDelays,0)
+
+covidLags<-covid %>% filter(country %in% compCntrs)
+# lag the time series
+for(cntr in compCntrs){
+  covidLags$Date[covidLags$country==cntr] = covidLags$Date[covidLags$country==cntr] + days(compDelays[compCntrs==cntr])
+  covidLags$country[covidLags$country==cntr] = paste0(cntr,'-LAG',compDelays[compCntrs==cntr],'days')
+}
+
+pl<- covidLags[,c('country','Date','cases')] %>% ggplot(aes(x=Date,y=cases,col=country)) + geom_line(lwd=I(1)) + geom_point() +xlim(as.Date('2020-03-05'),NA) + geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position = 'none')
+
+pl
+
+pl+xlim(Sys.Date()-days(7),Sys.Date()+days(7)) + ylim(0,7500)
+
+```
+
 
 ### exploratory plots: JHU data
 ```{r plot-CZ-jhu}
@@ -218,6 +320,9 @@ covidCZjhu[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Dat
 
 
 ```
+
+
+
 
 ### compare JHU and ÚZIS data
 

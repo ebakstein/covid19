@@ -74,6 +74,7 @@ covidLoadJHU<-function(){
   covid$country <- str_replace(covid$country,'Republic of Korea','South Korea')
   covid$country <- str_replace(covid$country,'Korea, South','South Korea')
   covid$country <- str_replace(covid$country,'Czechia','Czech Republic')
+  covid$country <- str_replace(covid$country,'US','United States')
   
   # return combined data
   return(covid)
