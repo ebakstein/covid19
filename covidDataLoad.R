@@ -109,3 +109,38 @@ attachPopCounts<-function(covid){
   
   return(covid)
 }
+
+# 4) Public Policy CZ, Wiki
+loadPolicyCzWiki <- function(){
+  
+  # the URL of the wikipedia page to use is in wp_page_url
+  wp_page_url <- 'https://cs.wikipedia.org/wiki/Pandemie_COVID-19_v_%C4%8Cesku'
+  page_html <- read_html(wp_page_url)
+  
+  policy <- page_html %>% html_nodes("table") %>% .[[5]] %>% 
+    html_table(fill = TRUE)
+  
+  names(policy)<-c('date','policyNo','description','valid','link')
+  policy$date <- parse_date(policy$date,format='%d. %B %Y',locale = locale('cs'))
+  
+  return(policy)
+}
+
+# 5) Public policy CZ, zakonyprolidi
+loadPolicyCZzakonyprolidi <- function(){
+  
+  wp_page_url <- 'https://www.zakonyprolidi.cz/koronavirus'
+  page_html <- read_html(wp_page_url)
+  policy <- page_html %>% html_node('.ResultList')%>% html_nodes(".Item") %>% map_df(~{
+      ident = .x %>% html_nodes( 'a') %>%  html_text()
+      link = .x %>% html_nodes('a') %>%  html_attr('href')
+      validSince = .x %>% html_nodes('.NodeNote') %>% html_text() %>% str_extract('\\d{1,2}\\.\\d{1,2}\\.\\d{4}') %>% parse_date(format='%d.%m.%Y')
+      desc =  .x %>% html_nodes('.NodeName') %>% html_text()
+      data.frame(validSince, ident,link,desc)
+    })
+  return(policy)
+}
+
+# 6) population counts from UN https://population.un.org/wpp/Download/Standard/CSV/
+# TBD
+

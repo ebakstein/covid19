@@ -5,7 +5,7 @@ author:
     eduard.bakstein@nudz.cz,
     http://bakstein.net,
     @edbakstein
-date: "18.3.2020"
+date: "20.3.2020"
 output:
   pdf_document: default
   word_document: default
@@ -175,11 +175,11 @@ covidCZregions <- tmp$covidCZregions
 ### exploratory plots: UZIS data
 
 ```{r plot-CZ}
-covidCZ %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+covidCZ %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of cases and tests (UZIS data)')
 
 
 
-covidCZ[,c('date','propIncrease','newCases')]  %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 Czech Republic: number of tests (UZIS data)')
+covidCZ[,c('date','propIncrease','newCases')]  %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 Czech Republic: proportional increase and new cases (UZIS data)')
 
 meanIncreaseCZ<-mean(covidCZ$propIncrease,na.rm=TRUE)
 
@@ -206,7 +206,7 @@ The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZl5)
 using USIZ data (apify)
 ```{r data table}
 
-kable(covidCZ)
+kable(covidCZ[covidCZ$date>=as.Date('2020-02-22'),])
 
 ```
 
@@ -238,7 +238,7 @@ qplot(covidCZAT$casesAT[1:(nrow(covidCZAT)-czDelay)],covidCZAT$casesCZ[(czDelay+
 
 
 
-covidCZAT %>% reshape2::melt(id='Date') %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 CZ vs Austria')
+# covidCZAT %>% reshape2::melt(id='Date') %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 CZ vs Austria')
 
 
 ```
@@ -314,23 +314,26 @@ pl+ geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex =
 pl2 <- pl+xlim(Sys.Date()-days(7),Sys.Date()+days(7)) + ylim(0,6500) + theme(legend.position=c(0.05,0.95),legend.justification = c(0,1))
 
 
-pl3<-pl2 + ggtitle('COVID19 trends: Czech Rep. vs lagged comparison countries') + ylab('total cases') + scale_x_date(breaks=max(covidCZjhu$Date)+days(seq(-14,13,7)),limits=c(max(covidCZjhu$Date)-days(14),max(covidCZjhu$Date)+days(13))) +geom_vline(xintercept =max(covidCZjhu$Date),col='orange' )+ geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6))
+ref33 <- data.frame(Date=covidCZjhu$Date[which.max(covidCZjhu$Date)]+days(0:20), cases=covidCZjhu$cases[which.max(covidCZjhu$Date)]*1.33^c(0:20), country='33% daily') 
 
-pl3
+pl3<-pl2 + ggtitle('COVID19 trends: Czech Rep. vs lagged comparison countries') + ylab('total cases') + scale_x_date(breaks=max(covidCZjhu$Date)+days(seq(-14,13,7)),limits=c(max(covidCZjhu$Date)-days(14),max(covidCZjhu$Date)+days(13))) +geom_vline(xintercept =max(covidCZjhu$Date),col='orange' )+ geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + geom_abline() + geom_line(data=ref33, linetype='dotted',lwd=1)
 
+
+pl3 
 ggsave('CZvsLaggedOther.png',pl3,width=20,height=15,units='cm',scale=.8)
 # pl2+facet_wrap(.~country)
 
 pl4<-pl3 + scale_y_log10() + theme(legend.position = 'none')
 
+pl4
 ggsave('CZvsLaggedOtherLOG.png',pl4,width=20,height=15,units='cm',scale=.8)
 ```
 
 
-### exploratory plots: JHU data
+<!-- ### exploratory plots: JHU data -->
 ```{r plot-CZ-jhu}
-covidCZjhu <- covid %>% filter(country=='Czech Republic') 
-covidCZjhu[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() +colSc + ggtitle('COVID-19 Czech Republic')
+# covidCZjhu <- covid %>% filter(country=='Czech Republic') 
+# covidCZjhu[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() +colSc + ggtitle('COVID-19 Czech Republic')
 
 
 ```
@@ -343,9 +346,21 @@ covidCZjhu[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% ggplot(aes(x=Dat
 ```{r compare-jhu-uzis}
 
 combCZ <- merge(covidCZ,covidCZjhu,by.x='date',by.y='Date')
+covidCZjhu <- covid %>% filter(country=='Czech Republic') 
+
 
 combCZ[,c('date','totalCases','newCases','cases','incident')] %>% rename(totalUZIS='totalCases',newUZIS='newCases',totalJHU='cases',newJHU='incident') %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + xlim(as.Date('2020-02-28'),NA) + geom_line() + ggtitle('CovidCZ: JHU and UZIS data comparison')
 
+```
+
+### Load public policy dates in CZ
+```{r pub-pol}
+ 
+ policyCZwiki<-loadPolicyCzWiki()
+ policyCZzpl<-loadPolicyCZzakonyprolidi()
+
+ kable(policyCZwiki,caption='Czech public policy changes (wikipedia)')
+ 
 ```
 
 
@@ -362,13 +377,17 @@ And https://timchurches.github.io/blog/posts/2020-03-10-modelling-the-effects-of
 
 ```
 
-## Store data locally for further reff
+## Store data locally for further ref
 
 ```{r save-todays-data}
 
  write.csv(covid,paste0('covid',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
 
  write.csv(covidCZ,paste0('covidCZ',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
+ 
+ write.csv(policyCZwiki,paste0('policyCZwiki',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
+
+ write.csv(policyCZzpl,paste0('policyCZzakonyprolidi',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
 
 ```
 
