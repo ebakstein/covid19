@@ -33,8 +33,8 @@ library(jsonlite)
 knitr::opts_chunk$set(echo = F, warning = F,message = F,fig.width = 8,fig.height=5,cache=FALSE,dev="pdf")
 tmp<-Sys.setlocale("LC_TIME", "C")
 
-figDir<-'fig/'
-dataDir<-'data/'
+figDir<-'../fig/'
+dataDir<-'../data/'
 dateStr<-format(Sys.time(),'%Y%m%d-%H%M')
 
 
