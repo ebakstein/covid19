@@ -5,7 +5,7 @@ author:
     eduard.bakstein@nudz.cz,
     http://bakstein.net,
     @edbakstein
-date: "20.3.2020"
+date: "`r format(Sys.time(), '%d. %m. %Y')`"
 output:
   pdf_document: default
   word_document: default
@@ -32,6 +32,10 @@ library(jsonlite)
 # setup
 knitr::opts_chunk$set(echo = F, warning = F,message = F,fig.width = 8,fig.height=5,cache=FALSE,dev="pdf")
 tmp<-Sys.setlocale("LC_TIME", "C")
+
+figDir<-'fig/'
+dataDir<-'data/'
+dateStr<-format(Sys.time(),'%Y%m%d-%H%M')
 
 
 vars<-c('cases','incident','recovered','deaths')
@@ -100,7 +104,10 @@ covid <- attachPopCounts(covid)
 
 ### Plot selected countries
 ```{r}
-selCountries<-c('Czech Republic','Italy','Iran','Germany','Spain','France','Austria','Slovakia','Poland','South Korea','United States')
+selCountries<-c('Czech Republic','Italy','Iran','Germany','Spain','France','Austria','Slovakia','Poland','South Korea','United States','United Kingdom')
+
+# selCountries<-c('Czech Republic','Finland','Austria','Sweden','Denmark','Norway')
+
 
 # cases in selected countries
 covid %>% filter(country %in% selCountries) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() + ggtitle('cummulative cases - comparison') + scale_x_date(expand=expand_scale(add=10)) + geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position = 'none')
@@ -150,7 +157,7 @@ According to the Johns-Hopkins data
 
 ```{r latest-numbers}
 
-maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(dateMax=Date[cases==max(cases)],count=max(cases), deaths=deaths[cases==max(cases)], recovered=recovered[cases==max(cases)],newCases=incident[cases==max(cases)]) %>% mutate(propIncrease=newCases/(count-newCases),deathRate=deaths/count) %>% ungroup()
+maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(dateMax=Date[which.max(cases)],count=max(cases), deaths=deaths[which.max(cases)], recovered=recovered[which.max(cases)],newCases=incident[which.max(cases)]) %>% mutate(propIncrease=newCases/(count-newCases),deathRate=deaths/count) %>% ungroup()
   
 kable(maxCounts)
 
@@ -168,6 +175,8 @@ obtain latest czech data from MZ / apify https://api.apify.com/v2/key-value-stor
 tmp<-covidLoadCZ()
 covidCZ <- tmp$covidCZ
 covidCZregions <- tmp$covidCZregions
+covidCZAgeSex <- tmp$infectedByAgeSex
+
 ```
 
 
@@ -178,8 +187,15 @@ covidCZregions <- tmp$covidCZregions
 covidCZ %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + ggtitle('COVID-19 Czech Republic: number of cases and tests (UZIS data)')
 
 
+prop<-covidCZ[,c('date','propIncrease','newCases')]  %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + scale_x_date(breaks='weeks', limits=c(as.Date('2020-02-26'),NA)) + ggtitle('COVID-19 Czech Republic: proportional increase and new cases (UZIS data)') + theme(legend.position=c(0.02,0.97),legend.justification = c(0,1))
 
-covidCZ[,c('date','propIncrease','newCases')]  %>% mutate(propIncrease=propIncrease*100) %>% reshape2::melt(id=c('date')) %>% ggplot(aes(x=date,y=value,col=variable)) + geom_line() + xlim(as.Date('2020-02-26'),NA) + ggtitle('COVID-19 Czech Republic: proportional increase and new cases (UZIS data)')
+prop
+
+ggsave(paste0(figDir,'CzPropIncrease-',dateStr,'.png'),prop,width=20,height=15,units='cm',scale=.8)
+
+
+
+
 
 meanIncreaseCZ<-mean(covidCZ$propIncrease,na.rm=TRUE)
 
@@ -187,6 +203,12 @@ meanIncreaseCZl5<-mean(covidCZ$propIncrease[nrow(covidCZ)+(-4:0)],na.rm=TRUE)
 
 outbreakCZ<-min(covidCZ$date[covidCZ$totalCases>0],na.rm=T)
 
+# infected by age and sex
+qp<-ggplot(covidCZAgeSex,aes(x=ageGrp,y=infected,fill=sex)) + geom_bar(stat='identity') + ggtitle('infected by afe and sex')
+
+qp
+
+qp + facet_grid(sex~.)
 
 ```
 
@@ -200,13 +222,41 @@ Mean daily increase (last 5 days): `r format(100*meanIncreaseCZl5,digits=3)`%
 
 The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZl5),digits=3)` days (`r format(24/log2(1+meanIncreaseCZl5),digits=3)` hours).
 
+```{r vs-typical-increases}
+# model of growth - starts 2 weeks ago
+strtX<-Sys.Date()-days(5);
+strtY<-covidCZ$totalCases[covidCZ$date==strtX]
+
+modelX<-data.frame(date=seq(outbreakCZ,Sys.Date()+days(2),by='days'))
+modelX<-modelX %>% mutate(daysOutbreak=as.numeric(difftime(modelX$date,strtX,units='days'))) %>%  mutate(dbl2d=strtY*2^(daysOutbreak/2),dbl3d=strtY*2^(daysOutbreak/3),dbl4d=strtY*2^(daysOutbreak/4),dbl5d=strtY*2^(daysOutbreak/5))
+
+
+
+modelX %>%reshape2::melt(id.vars='date',measure.vars=grep('^dbl',names(modelX))) %>%
+          ggplot(aes(x=date,y=value,col=variable)) +
+          geom_line(linetype='dashed') + 
+          geom_line(data=covidCZ,aes(x=date,y=totalCases),col=I('red'),lwd=1) + scale_x_date(limits = c(strtX,max(modelX$date)))+
+          ggtitle('COVID-19 CZ growth rate last 5ys (vs doubling time N days)') + ylab('totalCases') + 
+          scale_y_log10(limits=c(strtY,NA))+ geom_dl(aes(label = variable), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position='none')
+
+
+```
+
+
 
 ### CZ data table
 
 using USIZ data (apify)
 ```{r data table}
 
-kable(covidCZ[covidCZ$date>=as.Date('2020-02-22'),])
+covidCZ$newTests <- c(0,diff(covidCZ$testedCases)) 
+covidCZ$propIncreaseTests <- c(0,covidCZ$newTests[2:nrow(covidCZ)]/covidCZ$testedCases[1:(nrow(covidCZ)-1)])
+covidCZ$propPosTested <- covidCZ$newCases/covidCZ$newTests
+
+
+covidCZsm <- covidCZ[covidCZ$date>=as.Date('2020-02-22'),];
+
+kable(covidCZsm)
 
 ```
 
@@ -228,7 +278,7 @@ czDelay<-4
 
  covidCZAT %>% mutate(casesATlag4d = lag(casesAT,n=czDelay)) %>% reshape2::melt(id='Date') %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line(lwd=I(1)) + geom_point() +xlim(as.Date('2020-02-26'),NA) + theme(legend.position = c(0.01,0.99),legend.justification = c(0,1)) + ggtitle(paste0('Total COVID-19 cases: Czech Rep. vs Austria (delayed by ',czDelay,' days)'))
 
- ggsave('CzvsAt-4days.png',width=20,height=15,units='cm',scale=.8)
+ ggsave(paste0(figDir,'CzvsAt-4days-',dateStr,'.png'),width=20,height=15,units='cm',scale=.8)
 
 
 # plot delayed data
@@ -320,13 +370,13 @@ pl3<-pl2 + ggtitle('COVID19 trends: Czech Rep. vs lagged comparison countries') 
 
 
 pl3 
-ggsave('CZvsLaggedOther.png',pl3,width=20,height=15,units='cm',scale=.8)
+ggsave(paste0(figDir,'CZvsLaggedOther',dateStr,'.png'),pl3,width=20,height=15,units='cm',scale=.8)
 # pl2+facet_wrap(.~country)
 
 pl4<-pl3 + scale_y_log10() + theme(legend.position = 'none')
 
 pl4
-ggsave('CZvsLaggedOtherLOG.png',pl4,width=20,height=15,units='cm',scale=.8)
+ggsave(paste0(figDir,'CZvsLaggedOtherLOG',dateStr,'.png'),pl4,width=20,height=15,units='cm',scale=.8)
 ```
 
 
@@ -381,13 +431,13 @@ And https://timchurches.github.io/blog/posts/2020-03-10-modelling-the-effects-of
 
 ```{r save-todays-data}
 
- write.csv(covid,paste0('covid',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
+ write.csv(covid,paste0(dataDir,'covid',dateStr,'.csv'))
 
- write.csv(covidCZ,paste0('covidCZ',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
+ write.csv(covidCZ,paste0(dataDir,'covidCZ',dateStr,'.csv'))
  
- write.csv(policyCZwiki,paste0('policyCZwiki',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
+ write.csv(policyCZwiki,paste0(dataDir,'policyCZwiki',dateStr,'.csv'))
 
- write.csv(policyCZzpl,paste0('policyCZzakonyprolidi',format(Sys.time(),'%Y%m%d-%H%M'),'.csv'))
+ write.csv(policyCZzpl,paste0(dataDir,'policyCZzakonyprolidi',dateStr,'.csv'))
 
 ```
 

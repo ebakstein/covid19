@@ -22,6 +22,7 @@ covidLoadCZ<-function(){
   apifyCZurl<-'https://api.apify.com/v2/key-value-stores/K373S4uCFR9W1K8ei/records/LATEST?disableRedirect=true'
   czParsed <- fromJSON(txt=apifyCZurl)
   
+  # time series
   testedCases<-czParsed$numberOfTestedGraph %>% mutate(value=as.numeric(str_remove(value,',')), date=as.Date(substr(date,1,10))) %>% rename(testedCases='value')
   totalPositiveTests<-czParsed$totalPositiveTests %>% mutate(value=as.numeric(str_remove(value,',')), date=as.Date(substr(date,1,10))) %>% rename(totalCases='value')
   
@@ -33,8 +34,17 @@ covidLoadCZ<-function(){
   # cases by region
   covidCZregions <- czParsed$infectedByRegion %>% mutate(value=as.numeric(value)) %>% rename(totalCases='value')
   
+  # quarantine by infection country
+  countryOfInfection <- czParsed$countryOfInfection %>% mutate(value=as.numeric(value)) %>% rename(country='countryName',count='value')
+  
+  # age sex distribution
+  sexes <- str_replace(czParsed$infectedByAgeSex$sex,c('muž','žena'),c('m','f')) 
+  infectedByAgeSex <- rbind(mutate(czParsed$infectedByAgeSex$infectedByAge[[1]],sex=sexes[1]),mutate(czParsed$infectedByAgeSex$infectedByAge[[2]],sex=sexes[2])) %>% 
+        rename(ageGrp='age',infected='value') %>% 
+        mutate(sex=as.factor(sex),ageLb=as.numeric(str_extract(ageGrp,'^(\\d{1,2})')))
+  
   # return both as a list
-  return(list(covidCZ=covidCZ,covidCZregions=covidCZregions))
+  return(list(covidCZ=covidCZ,covidCZregions=covidCZregions,countryOfInfection=countryOfInfection,infectedByAgeSex=infectedByAgeSex))
   
 }
 
