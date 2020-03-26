@@ -24,6 +24,7 @@ library(directlabels)
 library(rvest)
 library(jsonlite)
 
+library(tmap)
 
 # epidemiology
 # library(earlyR)
@@ -38,9 +39,9 @@ dataDir<-'../data/'
 dateStr<-format(Sys.time(),'%Y%m%d-%H%M')
 
 
-vars<-c('cases','incident','recovered','deaths')
+vars<-c('cases','incident','deaths')
 colSc<-scale_colour_manual(
-  values = brewer.pal(4,"Set1")[c(2,4,3,1)],
+  values = brewer.pal(3,"Set1")[c(2,3,1)],
   labels = vars,
   aesthetics = c("colour", "fill"),
   name = 'variable'
@@ -110,7 +111,7 @@ selCountries<-c('Czech Republic','Italy','Iran','Germany','Spain','France','Aust
 
 
 # cases in selected countries
-covid %>% filter(country %in% selCountries) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() + ggtitle('cummulative cases - comparison') + scale_x_date(expand=expand_scale(add=10)) + geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position = 'none')
+covid %>% filter(country %in% selCountries) %>%    ggplot(aes(x=Date,y=cases,col=country)) + geom_line() + ggtitle('cummulative cases - comparison') + scale_x_date(expand=expand_scale(add=10),limits = c(as.Date('2020-02-15'),NA)) + geom_dl(aes(label = country), method = list(dl.combine("last.points"), cex = 0.6)) + theme(legend.position = 'none')
 selCountries<- c(selCountries,'China')
 
 ```
@@ -143,7 +144,7 @@ for(cntr in selCountries){
   
   outbreakDate<- min(cdata$Date[cdata$cases>0])
   
-  plt <-  cdata[,1:6] %>% reshape2::melt(id=c('country','Date')) %>% mutate(variable=fct_relevel(variable,vars)) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + colSc+ ggtitle(paste0('COVID19 - ',cntr)) + xlim(outbreakDate-days(3),NA)# + facet_wrap(~country) + theme(legend.position = 'none')
+  plt <-  cdata[,1:5] %>% reshape2::melt(id=c('country','Date')) %>% mutate(variable=fct_relevel(variable,vars)) %>% ggplot(aes(x=Date,y=value,col=variable)) + geom_line() + colSc+ ggtitle(paste0('COVID19 - ',cntr)) + xlim(outbreakDate-days(3),NA)# + facet_wrap(~country) + theme(legend.position = 'none')
   
   
   print(plt)
@@ -157,7 +158,7 @@ According to the Johns-Hopkins data
 
 ```{r latest-numbers}
 
-maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(dateMax=Date[which.max(cases)],count=max(cases), deaths=deaths[which.max(cases)], recovered=recovered[which.max(cases)],newCases=incident[which.max(cases)]) %>% mutate(propIncrease=newCases/(count-newCases),deathRate=deaths/count) %>% ungroup()
+maxCounts <- covid %>% filter(country %in% selCountries) %>% group_by(country) %>% summarize(dateMax=Date[which.max(cases)],count=max(cases), deaths=deaths[which.max(cases)],newCases=incident[which.max(cases)]) %>% mutate(propIncrease=newCases/(count-newCases),deathRate=deaths/count) %>% ungroup()
   
 kable(maxCounts)
 
@@ -194,9 +195,6 @@ prop
 ggsave(paste0(figDir,'CzPropIncrease-',dateStr,'.png'),prop,width=20,height=15,units='cm',scale=.8)
 
 
-
-
-
 meanIncreaseCZ<-mean(covidCZ$propIncrease,na.rm=TRUE)
 
 meanIncreaseCZl5<-mean(covidCZ$propIncrease[nrow(covidCZ)+(-4:0)],na.rm=TRUE)
@@ -221,6 +219,41 @@ The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZ),d
 Mean daily increase (last 5 days): `r format(100*meanIncreaseCZl5,digits=3)`%
 
 The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZl5),digits=3)` days (`r format(24/log2(1+meanIncreaseCZl5),digits=3)` hours).
+
+#### CZ data by region
+ credit: Vladimir Mazoch
+# ```{r map-cz}
+# 
+# data <- covidCZregions
+# data <- data.frame(matrix(unlist(data), nrow=length(data), byrow=T))
+# names(data) <- c("county", "Počet případů")
+# data$`Počet případů` <- as.numeric(as.character(data$`Počet případů`))
+# data$NAME_1 <- gsub(" kraj", "", data$county)
+# data$NAME_1 <- gsub("Hlavní město Praha", "Prague", data$NAME_1)
+# 
+# # https://gadm.org/download_country_v3.html
+# kraje <- readRDS(gzcon(url("https://biogeo.ucdavis.edu/data/gadm3.6/Rsf/gadm36_CZE_1_sf.rds")))
+# kraje <- merge(kraje, data)
+# 
+# # tmap ----
+# 
+# mapa <- tm_shape(kraje) +
+#   tm_fill("totalCases", breaks = c(10, 25, 50, 100, 150, 200, 300)) +
+#   tm_borders(col = "gray80") +
+#   tm_layout(
+#     legend.outside = TRUE,
+#     frame = FALSE,
+#     main.title = paste("CZ: total COVID-19 cases"),
+#     main.title.size = .8
+#   )
+# 
+# mapa
+
+```
+
+
+#### Increase rate
+
 
 ```{r vs-typical-increases}
 # model of growth - starts 2 weeks ago

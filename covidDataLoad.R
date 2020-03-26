@@ -56,27 +56,39 @@ covidLoadJHU<-function(){
   
   # jhu_conf_url <- paste("https://raw.githubusercontent.com/CSSEGISandData/", "COVID-19/master/csse_covid_19_data/", "csse_covid_19_time_series/", "time_series_19-covid-Confirmed.csv", sep = "")
   
-  jhu_conf_url <- paste0(jhu_base_url,"time_series_19-covid-Confirmed.csv")
-  jhu_deaths_url <- paste0(jhu_base_url,"time_series_19-covid-Deaths.csv")
-  jhu_recovered_url <- paste0(jhu_base_url,"time_series_19-covid-Recovered.csv")
+  # jhu_conf_url <- paste0(jhu_base_url,"time_series_19-covid-Confirmed.csv")
+  # jhu_deaths_url <- paste0(jhu_base_url,"time_series_19-covid-Deaths.csv")
+  # jhu_recovered_url <- paste0(jhu_base_url,"time_series_19-covid-Recovered.csv")
   
+  jhu_conf_url <- paste0(jhu_base_url,"time_series_covid19_confirmed_global.csv")
+  jhu_deaths_url <- paste0(jhu_base_url,"time_series_covid19_deaths_global.csv")
+  # jhu_recovered_url <- paste0(jhu_base_url,"time_series_covid19_recovered_global.csv")
   
-  covid_conf<-read_csv(jhu_conf_url) %>% rename(province = "Province/State", 
-                                                country = "Country/Region") %>% pivot_longer(-c(province, 
-                                                                                                country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(cases=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date) %>% group_by(country) %>% 
-    mutate(incident = c(0, diff(cases))) 
+    
+  covid_conf<-read_csv(jhu_conf_url) %>% 
+        rename(province = "Province/State", country = "Country/Region") %>% 
+        pivot_longer(-c(province, country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% 
+        arrange(province, Date) %>% 
+        group_by(country, Date) %>% 
+        summarise(cases=sum(cumulative_cases)) %>% 
+        mutate(Date=mdy(Date)) %>% arrange(country, Date) %>% 
+        group_by(country) %>% 
+        mutate(incident = c(0, diff(cases))) 
   
-  covid_deaths<-read_csv(jhu_deaths_url) %>% rename(province = "Province/State", 
-                                                    country = "Country/Region") %>% pivot_longer(-c(province, 
-                                                                                                    country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(deaths=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date)
+  covid_deaths<-read_csv(jhu_deaths_url) %>% 
+        rename(province = "Province/State",country = "Country/Region") %>% 
+        pivot_longer(-c(province, country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% 
+        arrange(province, Date) %>% group_by(country, Date) %>% 
+        summarise(deaths=sum(cumulative_cases)) %>% 
+        mutate(Date=mdy(Date)) %>% arrange(country, Date)
   
-  covid_recovered<-read_csv(jhu_recovered_url) %>% rename(province = "Province/State", 
-                                                          country = "Country/Region") %>% pivot_longer(-c(province, 
-                                                                                                          country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(recovered=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date)
+  # covid_recovered<-read_csv(jhu_recovered_url) %>% rename(province = "Province/State", 
+  #                                                         country = "Country/Region") %>% pivot_longer(-c(province, 
+  #                                                                                                         country, Lat, Long), names_to = "Date", values_to = "cumulative_cases") %>% arrange(province, Date) %>% group_by(country, Date) %>% summarise(recovered=sum(cumulative_cases)) %>% mutate(Date=mdy(Date)) %>% arrange(country, Date)
   
-  # combine the 3 tables
+  # combine the 2 tables
   covid<-left_join(covid_conf,covid_deaths,by=c('country','Date'))
-  covid<-left_join(covid,covid_recovered,by=c('country','Date')) 
+  # covid<-left_join(covid,covid_recovered,by=c('country','Date')) 
   
   # modify country names - to be consistent with wiki 
   covid$country <- str_remove(covid$country,' \\(.+\\)') # remove country specifier (...republic of)
