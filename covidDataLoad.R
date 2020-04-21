@@ -139,8 +139,13 @@ loadPolicyCzWiki <- function(){
   wp_page_url <- 'https://cs.wikipedia.org/wiki/Pandemie_COVID-19_v_%C4%8Cesku'
   page_html <- read_html(wp_page_url)
   
-  policy <- page_html %>% html_nodes("table") %>% .[[5]] %>% 
-    html_table(fill = TRUE)
+  tbl <- page_html %>% html_nodes("table") %>% .[[3]]
+  
+  # parse the text
+  policy <- tbl %>% html_table(fill = TRUE)
+  
+  # # parse links
+  # policy$URL <- tbl %>% html_nodes('tr td a') %>% html_attr('href')
   
   names(policy)<-c('date','policyNo','description','valid','link')
   policy$date <- parse_date(policy$date,format='%d. %B %Y',locale = locale('cs'))

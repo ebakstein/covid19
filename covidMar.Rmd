@@ -105,7 +105,7 @@ covid <- attachPopCounts(covid)
 
 ### Plot selected countries
 ```{r}
-selCountries<-c('Czech Republic','Italy','Iran','Germany','Spain','France','Austria','Slovakia','Poland','South Korea','United States','United Kingdom')
+selCountries<-c('Czech Republic','Italy','India','Iran','Germany','Spain','France','Finland','Austria','Slovakia','Poland','South Korea','United States','United Kingdom')
 
 # selCountries<-c('Czech Republic','Finland','Austria','Sweden','Denmark','Norway')
 
@@ -222,7 +222,8 @@ The diseased count doubles on average every `r format(1/log2(1+meanIncreaseCZl5)
 
 #### CZ data by region
  credit: Vladimir Mazoch
-# ```{r map-cz}
+
+```{r map-cz}
 # 
 # data <- covidCZregions
 # data <- data.frame(matrix(unlist(data), nrow=length(data), byrow=T))
